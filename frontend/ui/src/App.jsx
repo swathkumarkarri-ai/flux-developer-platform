@@ -11,7 +11,7 @@ export default function App() {
   ]);
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [testResults, setTestResults] = useState(null);
-  const [activeSubTab, setActiveSubTab] = useState('Overview'); // <-- Added missing state hook
+  const [activeSubTab, setActiveSubTab] = useState('Overview');
 
   // Trigger Backend Analysis
   const handleStartAnalysis = async () => {
@@ -62,19 +62,13 @@ export default function App() {
   };
 
   return (
-   // ✅ REPLACE WITH THIS:
-   return (
-     <div className="app-container">
-       <header className="app-header">
-         <div className="header-brand">FLUX <span className="header-badge">CONSOLE</span></div>
-         <div className="header-status">
-           <span className="live-dot"></span> SYSTEM READY
-         </div>
-       </header>
-
-       {/* SCREEN 01: SPLASH */}
-       {screen === '01' && (
-         ...
+    <div className="app-container">
+      <header className="app-header">
+        <div className="header-brand">FLUX <span className="header-badge">CONSOLE</span></div>
+        <div className="header-status">
+          <span className="live-dot"></span> SYSTEM READY
+        </div>
+      </header>
 
       {/* SCREEN 01: SPLASH */}
       {screen === '01' && (
