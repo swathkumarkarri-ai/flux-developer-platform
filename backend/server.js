@@ -2,6 +2,7 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const { GoogleGenAI } = require('@google/genai');
 
 const { analyzeRepository } = require('./src/services/repoAnalyzer');
 const { runSynthesizedSuite, generateValidationPatch } = require('./src/services/testEngine');
@@ -9,6 +10,9 @@ const { runSynthesizedSuite, generateValidationPatch } = require('./src/services
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Initialize Google Gen AI client
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // 1. Analyze Git Repository
 app.post('/api/git/analyze', async (req, res) => {
@@ -34,7 +38,40 @@ app.post('/api/tests/run', (req, res) => {
   return res.json(results);
 });
 
-// 3. Patch Diff Generation & Retest Approval
+// 3. AI-Powered Autonomous Diagnosis & Patch Generation
+app.post('/api/ai/diagnose', async (req, res) => {
+  console.log('[FLUX Engine] Triggering Gemini 2.5 Flash for autonomous diagnosis...');
+  const { failedRoute, errorSnippet, codeContent } = req.body;
+
+  const prompt = `
+You are an autonomous CI/CD engineer inside FLUX.
+Diagnose this API failure:
+- Route: ${failedRoute || 'POST /api/v1/auth/login'}
+- Error: ${errorSnippet || 'Database lookup failed: null pointer in user query'}
+- Source File:
+${codeContent || 'app.post("/api/v1/auth/login", (req, res) => { const { email, password } = req.body; if (!email || !password) throw new Error("Database lookup failed: null pointer in user query"); });'}
+
+Respond strictly in valid JSON format with two keys:
+1. "rootCause": A 1-2 sentence technical summary of why it failed.
+2. "patchDiff": A git unified diff (+ and - lines) fixing the bug using input validation (e.g. Zod or schema check).
+`;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: { responseMimeType: 'application/json' }
+    });
+
+    const diagnosis = JSON.parse(response.text);
+    return res.json({ success: true, ...diagnosis });
+  } catch (err) {
+    console.error('[FLUX Engine] AI Diagnosis error:', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. Patch Diff Generation & Retest Approval
 app.post('/api/diagnosis/patch', (req, res) => {
   console.log('[FLUX Engine] Patch approved. Applying code diff and running automated retest...');
   const patchDiff = generateValidationPatch();
@@ -52,7 +89,7 @@ app.post('/api/diagnosis/patch', (req, res) => {
   });
 });
 
-// 4. Deployment Trigger
+// 5. Deployment Trigger
 app.post('/api/deploy/execute', (req, res) => {
   console.log('[FLUX Engine] Verification 100%. Triggering container build...');
   return res.json({
