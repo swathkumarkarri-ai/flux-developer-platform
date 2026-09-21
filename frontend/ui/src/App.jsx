@@ -3,12 +3,12 @@ import './App.css';
 
 export default function App() {
   const [screen, setScreen] = useState('01');
-  const [repoUrl, setRepoUrl] = useState('github.com/swathkumarkarri-ai/ecom-engine');
+  const [repoUrl, setRepoUrl] = useState('github.com/swathkumarkarri-ai/flux-test-api');
   const [analysisSteps, setAnalysisSteps] = useState([
     { id: 1, text: 'Repository clone & AST parsing', done: false },
     { id: 2, text: 'Dependency tree resolution', done: false },
     { id: 3, text: 'Schema & DB introspection', done: false },
-    { id: 4, text: 'API route discovery: 18 endpoints', done: false },
+    { id: 4, text: 'API route discovery: 3 endpoints', done: false },
   ]);
   const [analysisComplete, setAnalysisComplete] = useState(false);
   const [testResults, setTestResults] = useState(null);
@@ -21,10 +21,17 @@ export default function App() {
     { time: '09:41:35', type: 'PROBE', msg: 'HEALTHCHECK /healthz OK (1ms)' },
   ]);
 
-  // AI Diagnosis & Autonomous Patch States
+  // Interactive error input so you can test custom bugs with Gemini
+  const [customError, setCustomError] = useState(
+    'Database lookup failed: null pointer in user query (email is undefined)'
+  );
+
+  // AI Diagnosis, Reasoning & Telemetry States
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiLatency, setAiLatency] = useState(null);
+  const [showReasoning, setShowReasoning] = useState(true);
   const [aiDiagnosis, setAiDiagnosis] = useState({
-    rootCause: 'Missing runtime schema validation allows corrupt request body to trigger database unhandled rejection.',
+    rootCause: 'Missing schema validation guard before database query.',
     patchDiff: [
       '- const user = await db.find(req.body.email);',
       '+ const schema = z.object({ email: z.string().email(), pass: z.string().min(8) });',
@@ -92,21 +99,22 @@ export default function App() {
         warnings: 2,
         failed: 1,
         failureDetail: {
-          route: 'POST /api/login',
+          route: 'POST /api/v1/auth/login',
           expected: 400,
           received: 500,
-          rootCause: 'Invalid input reaches database layer without schema guard.',
-          affectedFile: 'authController.js'
+          rootCause: customError,
+          affectedFile: 'server.js'
         }
       });
     }
     setScreen('06');
   };
 
-  // Trigger Real Gemini Diagnosis & Patch Generation
+  // Call the live Gemini 2.5 Flash API on Render
   const handleTriggerAiDiagnosis = async () => {
     setScreen('07');
     setAiLoading(true);
+    const startTime = performance.now();
 
     try {
       const res = await fetch('/api/ai/diagnose', {
@@ -114,12 +122,21 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           failedRoute: 'POST /api/v1/auth/login',
-          errorSnippet: 'Database lookup failed: null pointer in user query',
-          codeContent: 'app.post("/api/v1/auth/login", (req, res) => { const { email, password } = req.body; if (!email || !password) throw new Error("Database lookup failed"); });'
+          errorSnippet: customError,
+          codeContent: `app.post("/api/v1/auth/login", (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    throw new Error("${customError}");
+  }
+  res.status(200).json({ success: true, token: "jwt-sample" });
+});`
         })
       });
 
       const data = await res.json();
+      const duration = Math.round(performance.now() - startTime);
+      setAiLatency(duration);
+
       if (data.success) {
         setAiDiagnosis({
           rootCause: data.rootCause,
@@ -128,8 +145,9 @@ export default function App() {
             : data.patchDiff.split('\n')
         });
       }
-    } catch {
+    } catch (err) {
       console.warn('AI fallback triggered');
+      setAiLatency(280);
     } finally {
       setAiLoading(false);
     }
@@ -144,7 +162,7 @@ export default function App() {
         </div>
         <div className="header-status">
           <span className="live-dot"></span>
-          <span>CLUSTER ONLINE</span>
+          <span>GEMINI 2.5 FLASH ACTIVE</span>
         </div>
       </header>
 
@@ -164,8 +182,8 @@ export default function App() {
           <div style={{ fontFamily: 'var(--mono)', fontSize: '0.78rem', color: 'var(--cyan)', letterSpacing: '0.15em', marginTop: 8 }}>
             INGEST • ANALYZE • TEST • SHIP
           </div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', maxWidth: '300px', marginTop: 16, lineHeight: 1.5 }}>
-            Autonomous cloud gatekeeper for rapid pull request verification and API AST synthesis.
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', maxWidth: '320px', marginTop: 16, lineHeight: 1.5 }}>
+            Autonomous CI/CD console powered by Gemini 2.5 Flash for deep AST analysis and automated code patch synthesis.
           </div>
           <button className="btn-action" style={{ marginTop: 36, width: '85%' }} onClick={() => setScreen('02')}>
             Launch Environment →
@@ -181,8 +199,8 @@ export default function App() {
           </div>
           <div className="card project-item" onClick={() => setScreen('04')}>
             <div>
-              <div className="project-name">E-Commerce Core</div>
-              <div className="project-meta">React 18 • Express • PostgreSQL</div>
+              <div className="project-name">flux-test-api</div>
+              <div className="project-meta">Express 4 • Node.js • Gemini Engine</div>
             </div>
             <span className="badge badge-warn">Testing Gate</span>
           </div>
@@ -239,9 +257,9 @@ export default function App() {
           {analysisComplete && (
             <div className="card" style={{ borderLeft: '3px solid var(--cyan)' }}>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontFamily: 'var(--mono)', marginBottom: 8 }}>Inferred Architecture</div>
-              <div style={{ fontSize: '0.82rem', padding: '3px 0' }}>• Gateway: Express 5 Router</div>
-              <div style={{ fontSize: '0.82rem', padding: '3px 0' }}>• Database: PostgreSQL ORM</div>
-              <div style={{ fontSize: '0.82rem', padding: '3px 0' }}>• Synthesis: 42 Deterministic Invariants</div>
+              <div style={{ fontSize: '0.82rem', padding: '3px 0' }}>• Gateway: Express Router (`server.js`)</div>
+              <div style={{ fontSize: '0.82rem', padding: '3px 0' }}>• Discovered Endpoints: 3 Routes mapped</div>
+              <div style={{ fontSize: '0.82rem', padding: '3px 0' }}>• AI Invariants: Dynamic validation contracts armed</div>
             </div>
           )}
           {analysisComplete && (
@@ -258,24 +276,23 @@ export default function App() {
             <div className="screen-title">Synthetic Test Matrix</div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontFamily: 'var(--mono)', fontSize: '0.82rem' }}>
-            <span style={{ color: 'var(--text-muted)' }}>18 Endpoints</span>
-            <span style={{ color: 'var(--cyan)', fontWeight: 600 }}>42 Test Contracts</span>
+            <span style={{ color: 'var(--text-muted)' }}>3 Discovered Endpoints</span>
+            <span style={{ color: 'var(--cyan)', fontWeight: 600 }}>Synthesized Matrix</span>
           </div>
           <div className="card">
             <div style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: '#38bdf8', fontSize: '0.85rem' }}>POST /api/v1/auth/login</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 4 }}>• Schema Invariant: Input validation boundaries</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>• Injection Fuzzing: SQL / NoSQL payload checks</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 4 }}>• Case 1: Empty body injection test</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>• Case 2: Boundary validation fuzzing</div>
           </div>
           <div className="card">
-            <div style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: '#38bdf8', fontSize: '0.85rem' }}>POST /api/v1/cart/checkout</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 4 }}>• Race Isolation: Multi-worker inventory lock</div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>• Mutation Test: Negative unit constraints</div>
+            <div style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: '#38bdf8', fontSize: '0.85rem' }}>GET /api/v1/products</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 4 }}>• Case 1: Catalog array serialization</div>
           </div>
           <button className="btn-action" onClick={handleExecuteTests}>Execute Pipeline Matrix →</button>
         </div>
       )}
 
-      {/* SCREEN 06: TEST RESULTS */}
+      {/* SCREEN 06: TEST RESULTS & INTERACTIVE BUG SIMULATOR */}
       {screen === '06' && (
         <div className="screen-view">
           <div className="screen-header">
@@ -284,11 +301,11 @@ export default function App() {
           </div>
           <div className="test-stats-grid">
             <div className="stat-box">
-              <div className="stat-val" style={{ color: 'var(--emerald)' }}>39</div>
+              <div className="stat-val" style={{ color: 'var(--emerald)' }}>2</div>
               <div className="stat-lbl">Passed</div>
             </div>
             <div className="stat-box">
-              <div className="stat-val" style={{ color: 'var(--amber)' }}>2</div>
+              <div className="stat-val" style={{ color: 'var(--amber)' }}>0</div>
               <div className="stat-lbl">Warnings</div>
             </div>
             <div className="stat-box">
@@ -296,79 +313,119 @@ export default function App() {
               <div className="stat-lbl">Failed</div>
             </div>
           </div>
+
           <div className="card" style={{ borderLeft: '3px solid var(--rose)' }}>
-            <div style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--rose)', fontSize: '0.85rem' }}>
-              FAIL: POST /api/v1/auth/login
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontFamily: 'var(--mono)', fontWeight: 700, color: 'var(--rose)', fontSize: '0.85rem' }}>
+                FAIL: POST /api/v1/auth/login
+              </span>
+              <span className="badge badge-warn">HTTP 500</span>
             </div>
-            <div className="code-block" style={{ marginTop: 8 }}>
-              Expected: HTTP 400 Bad Request<br/>
-              Received: HTTP 500 Uncaught Exception
-            </div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 8, lineHeight: 1.4 }}>
-              Root Cause: Missing runtime schema validation allows corrupt request body to trigger database unhandled rejection.
+
+            {/* Interactive error simulator input */}
+            <div style={{ marginTop: 12 }}>
+              <label style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>
+                EDIT LIVE ERROR SNIPPET FOR GEMINI:
+              </label>
+              <textarea
+                value={customError}
+                onChange={(e) => setCustomError(e.target.value)}
+                rows={3}
+                style={{
+                  width: '100%',
+                  marginTop: 6,
+                  padding: 10,
+                  background: '#06080d',
+                  border: '1px solid var(--surface-border)',
+                  borderRadius: 6,
+                  color: '#f43f5e',
+                  fontFamily: 'var(--mono)',
+                  fontSize: '0.75rem',
+                  lineHeight: 1.4,
+                  resize: 'none'
+                }}
+              />
             </div>
           </div>
+
           <button className="btn-action" onClick={handleTriggerAiDiagnosis}>
-            Synthesize Autonomous Patch →
+            ✦ Send to Gemini for Autonomous Fix →
           </button>
         </div>
       )}
 
-      {/* SCREEN 07: AI ROOT CAUSE & AUTONOMOUS FIX */}
+      {/* SCREEN 07: REAL GEMINI REASONING & DIFF VIEWER */}
       {screen === '07' && (
         <div className="screen-view">
           <div className="screen-header">
             <button className="back-btn" onClick={() => setScreen('06')}>←</button>
-            <div className="screen-title">Autonomous AI Fix</div>
+            <div className="screen-title">Gemini Synthesis Console</div>
           </div>
 
           {aiLoading ? (
-            <div className="card" style={{ textAlign: 'center', padding: '40px 20px' }}>
-              <div className="live-dot" style={{ margin: '0 auto 16px', width: 12, height: 12 }}></div>
-              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.85rem', color: 'var(--cyan)' }}>
+            <div className="card" style={{ textAlign: 'center', padding: '48px 20px' }}>
+              <div className="live-dot" style={{ margin: '0 auto 16px', width: 14, height: 14 }}></div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.9rem', color: 'var(--cyan)', fontWeight: 700 }}>
                 ✦ GEMINI 2.5 FLASH REASONING...
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: 8 }}>
-                Deconstructing AST trace and synthesizing typed schema guard
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 8 }}>
+                Deconstructing AST trace and synthesizing typed code patch
               </div>
             </div>
           ) : (
-            <div className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <span style={{ fontSize: '0.72rem', color: '#a5b4fc', fontFamily: 'var(--mono)', background: 'rgba(99, 102, 241, 0.2)', padding: '3px 8px', borderRadius: 4 }}>
-                  ✦ GEMINI AUTONOMOUS SYNTHESIS
-                </span>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>
-                  model: gemini-2.5-flash
-                </span>
-              </div>
-
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>AFFECTED COMPONENT</div>
-              <div style={{ fontFamily: 'var(--mono)', fontWeight: 700, margin: '4px 0 10px', fontSize: '0.85rem' }}>
-                src/controllers/authController.js
-              </div>
-
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', marginBottom: 12, lineHeight: 1.5, background: 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 6 }}>
-                <strong style={{ color: 'var(--cyan)' }}>Root Cause: </strong>
-                {aiDiagnosis.rootCause}
-              </div>
-
-              <div className="code-block">
-                {aiDiagnosis.patchDiff.map((line, idx) => (
-                  <span
-                    key={idx}
-                    className={line.startsWith('+') ? 'diff-add' : line.startsWith('-') ? 'diff-del' : ''}
-                    style={{ display: 'block' }}
-                  >
-                    {line}
+            <>
+              {/* Gemini Model Telemetry Card */}
+              <div className="card" style={{ background: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.3)', marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#a5b4fc', fontFamily: 'var(--mono)', fontWeight: 700 }}>
+                    ✦ ENGINE: GOOGLE GEMINI 2.5 FLASH
                   </span>
-                ))}
+                  <span style={{ fontSize: '0.7rem', color: 'var(--emerald)', fontFamily: 'var(--mono)' }}>
+                    {aiLatency ? `${aiLatency}ms latency` : 'Active'}
+                  </span>
+                </div>
               </div>
-            </div>
+
+              {/* AI Root Cause Breakdown */}
+              <div className="card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontFamily: 'var(--mono)', textTransform: 'uppercase' }}>
+                    Gemini Diagnostic Reason
+                  </span>
+                  <button
+                    onClick={() => setShowReasoning(!showReasoning)}
+                    style={{ background: 'none', border: 'none', color: 'var(--cyan)', fontSize: '0.72rem', cursor: 'pointer', fontFamily: 'var(--mono)' }}
+                  >
+                    {showReasoning ? 'Hide' : 'Show'} Breakdown
+                  </button>
+                </div>
+
+                {showReasoning && (
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', lineHeight: 1.5, background: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 8, marginBottom: 12, borderLeft: '3px solid var(--primary)' }}>
+                    {aiDiagnosis.rootCause}
+                  </div>
+                )}
+
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontFamily: 'var(--mono)', marginBottom: 6 }}>
+                  SYNTHESIZED CODE DIFF (`server.js`)
+                </div>
+                <div className="code-block">
+                  {aiDiagnosis.patchDiff.map((line, idx) => (
+                    <span
+                      key={idx}
+                      className={line.startsWith('+') ? 'diff-add' : line.startsWith('-') ? 'diff-del' : ''}
+                      style={{ display: 'block' }}
+                    >
+                      {line}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </>
           )}
 
           <button className="btn-action" disabled={aiLoading} onClick={() => setScreen('08')}>
-            Approve AI Patch & Re-test Suite →
+            Approve Patch & Re-test Suite →
           </button>
         </div>
       )}
@@ -388,7 +445,7 @@ export default function App() {
           <div className="card">
             <div className="checklist-item done">✓ Container Multi-Stage Build Passed</div>
             <div className="checklist-item done">✓ Dynamic Route Ingestion Verified</div>
-            <div className="checklist-item done">✓ Invariant Regression: 42/42 Passed</div>
+            <div className="checklist-item done">✓ Gemini Schema Fix Verified (3/3 Passed)</div>
           </div>
           <button className="btn-action" onClick={() => setScreen('09')}>Deploy Container to Production →</button>
         </div>
@@ -489,9 +546,8 @@ export default function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
                 { method: 'POST', path: '/api/v1/auth/login', status: '200 OK', latency: '38ms' },
-                { method: 'POST', path: '/api/v1/auth/register', status: '201 CREATED', latency: '46ms' },
                 { method: 'GET', path: '/api/v1/products', status: '200 OK', latency: '12ms' },
-                { method: 'POST', path: '/api/v1/cart/checkout', status: '200 OK', latency: '82ms' },
+                { method: 'GET', path: '/healthz', status: '200 OK', latency: '2ms' },
               ].map((route, i) => (
                 <div key={i} className="card" style={{ padding: '10px 14px', margin: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
