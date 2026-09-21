@@ -1,0 +1,7 @@
+node_modules/
+backend/node_modules/
+frontend/ui/node_modules/
+frontend/ui/dist/
+dist/
+.env
+.DS_Store
