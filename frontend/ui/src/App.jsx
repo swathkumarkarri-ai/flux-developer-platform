@@ -21,6 +21,18 @@ export default function App() {
     { time: '09:41:35', type: 'PROBE', msg: 'HEALTHCHECK /healthz OK (1ms)' },
   ]);
 
+  // AI Diagnosis & Autonomous Patch States
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiDiagnosis, setAiDiagnosis] = useState({
+    rootCause: 'Missing runtime schema validation allows corrupt request body to trigger database unhandled rejection.',
+    patchDiff: [
+      '- const user = await db.find(req.body.email);',
+      '+ const schema = z.object({ email: z.string().email(), pass: z.string().min(8) });',
+      '+ const validated = schema.parse(req.body);',
+      '+ const user = await db.find(validated.email);'
+    ]
+  });
+
   // Live log generator when Dashboard is open
   useEffect(() => {
     if (screen !== '09' || activeSubTab !== 'Logs') return;
@@ -45,7 +57,6 @@ export default function App() {
     setScreen('04');
     setAnalysisComplete(false);
 
-    // Sequential checkmark animations
     analysisSteps.forEach((step, index) => {
       setTimeout(() => {
         setAnalysisSteps(prev =>
@@ -64,7 +75,7 @@ export default function App() {
         body: JSON.stringify({ repoUrl })
       });
     } catch {
-      // Fallback
+      // Offline fallback
     }
   };
 
@@ -90,6 +101,38 @@ export default function App() {
       });
     }
     setScreen('06');
+  };
+
+  // Trigger Real Gemini Diagnosis & Patch Generation
+  const handleTriggerAiDiagnosis = async () => {
+    setScreen('07');
+    setAiLoading(true);
+
+    try {
+      const res = await fetch('/api/ai/diagnose', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          failedRoute: 'POST /api/v1/auth/login',
+          errorSnippet: 'Database lookup failed: null pointer in user query',
+          codeContent: 'app.post("/api/v1/auth/login", (req, res) => { const { email, password } = req.body; if (!email || !password) throw new Error("Database lookup failed"); });'
+        })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setAiDiagnosis({
+          rootCause: data.rootCause,
+          patchDiff: Array.isArray(data.patchDiff)
+            ? data.patchDiff
+            : data.patchDiff.split('\n')
+        });
+      }
+    } catch {
+      console.warn('AI fallback triggered');
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   return (
@@ -265,28 +308,68 @@ export default function App() {
               Root Cause: Missing runtime schema validation allows corrupt request body to trigger database unhandled rejection.
             </div>
           </div>
-          <button className="btn-action" onClick={() => setScreen('07')}>Synthesize Autonomous Patch →</button>
+          <button className="btn-action" onClick={handleTriggerAiDiagnosis}>
+            Synthesize Autonomous Patch →
+          </button>
         </div>
       )}
 
-      {/* SCREEN 07: PATCH & DIFF */}
+      {/* SCREEN 07: AI ROOT CAUSE & AUTONOMOUS FIX */}
       {screen === '07' && (
         <div className="screen-view">
           <div className="screen-header">
             <button className="back-btn" onClick={() => setScreen('06')}>←</button>
-            <div className="screen-title">Autonomous Patch Synthesis</div>
+            <div className="screen-title">Autonomous AI Fix</div>
           </div>
-          <div className="card">
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>MODIFIED COMPONENT</div>
-            <div style={{ fontFamily: 'var(--mono)', fontWeight: 700, margin: '4px 0 8px', fontSize: '0.85rem' }}>src/controllers/authController.js</div>
-            <div className="code-block">
-              <span className="diff-del">- const user = await db.find(req.body.email);</span>
-              <span className="diff-add">+ const schema = z.object(&#123; email: z.string().email(), pass: z.string().min(8) &#125;);</span>
-              <span className="diff-add">+ const validated = schema.parse(req.body);</span>
-              <span className="diff-add">+ const user = await db.find(validated.email);</span>
+
+          {aiLoading ? (
+            <div className="card" style={{ textAlign: 'center', padding: '40px 20px' }}>
+              <div className="live-dot" style={{ margin: '0 auto 16px', width: 12, height: 12 }}></div>
+              <div style={{ fontFamily: 'var(--mono)', fontSize: '0.85rem', color: 'var(--cyan)' }}>
+                ✦ GEMINI 2.5 FLASH REASONING...
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: 8 }}>
+                Deconstructing AST trace and synthesizing typed schema guard
+              </div>
             </div>
-          </div>
-          <button className="btn-action" onClick={() => setScreen('08')}>Approve Patch & Re-test Suite →</button>
+          ) : (
+            <div className="card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <span style={{ fontSize: '0.72rem', color: '#a5b4fc', fontFamily: 'var(--mono)', background: 'rgba(99, 102, 241, 0.2)', padding: '3px 8px', borderRadius: 4 }}>
+                  ✦ GEMINI AUTONOMOUS SYNTHESIS
+                </span>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>
+                  model: gemini-2.5-flash
+                </span>
+              </div>
+
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontFamily: 'var(--mono)' }}>AFFECTED COMPONENT</div>
+              <div style={{ fontFamily: 'var(--mono)', fontWeight: 700, margin: '4px 0 10px', fontSize: '0.85rem' }}>
+                src/controllers/authController.js
+              </div>
+
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', marginBottom: 12, lineHeight: 1.5, background: 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 6 }}>
+                <strong style={{ color: 'var(--cyan)' }}>Root Cause: </strong>
+                {aiDiagnosis.rootCause}
+              </div>
+
+              <div className="code-block">
+                {aiDiagnosis.patchDiff.map((line, idx) => (
+                  <span
+                    key={idx}
+                    className={line.startsWith('+') ? 'diff-add' : line.startsWith('-') ? 'diff-del' : ''}
+                    style={{ display: 'block' }}
+                  >
+                    {line}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <button className="btn-action" disabled={aiLoading} onClick={() => setScreen('08')}>
+            Approve AI Patch & Re-test Suite →
+          </button>
         </div>
       )}
 
