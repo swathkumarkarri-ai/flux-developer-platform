@@ -62,12 +62,19 @@ export default function App() {
   };
 
   return (
-    <div className="mobile-frame">
-      {/* Top Status Bar */}
-      <div className="status-bar">
-        <span>09:41</span>
-        <span>FLUX // 5G</span>
-      </div>
+   // ✅ REPLACE WITH THIS:
+   return (
+     <div className="app-container">
+       <header className="app-header">
+         <div className="header-brand">FLUX <span className="header-badge">CONSOLE</span></div>
+         <div className="header-status">
+           <span className="live-dot"></span> SYSTEM READY
+         </div>
+       </header>
+
+       {/* SCREEN 01: SPLASH */}
+       {screen === '01' && (
+         ...
 
       {/* SCREEN 01: SPLASH */}
       {screen === '01' && (
